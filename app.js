@@ -1,5 +1,5 @@
 
-// app.js (LIVE)
+// app.js (LIVE v2)
 export const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS58VxZhfp2Z4pfQCG26_LaH9E765Ijf5t6Dz-50il_uwie1LtSt5E9OV_4uVoXQ7CoitaMcj1GniIi/pub?gid=0&single=true&output=csv";
 
 let SHEET_HEADERS = [];
@@ -15,10 +15,26 @@ const btnBuscar = document.getElementById('btnBuscar');
 const btnCargar = document.getElementById('btnCargar');
 const resultado = document.getElementById('resultado');
 const sheetInfo = document.getElementById('sheetInfo');
+const selQrbox = document.getElementById('qrbox');
+const chkVibrate = document.getElementById('vibrate');
+const chkSound = document.getElementById('sound');
 
 let html5QrCode = null;
 let currentCameraId = null;
 let cameras = [];
+let audioCtx = null;
+
+const LS = { qrbox: 'qr.qrbox', vibrate: 'qr.vibrate', sound: 'qr.sound' };
+
+(function loadPrefs() {
+  const q = localStorage.getItem(LS.qrbox); if (q) selQrbox.value = q;
+  const v = localStorage.getItem(LS.vibrate); if (v !== null) chkVibrate.checked = v == '1';
+  const s = localStorage.getItem(LS.sound); if (s !== null) chkSound.checked = s == '1';
+})();
+
+selQrbox.onchange = () => localStorage.setItem(LS.qrbox, selQrbox.value);
+chkVibrate.onchange = () => localStorage.setItem(LS.vibrate, chkVibrate.checked ? '1' : '0');
+chkSound.onchange = () => localStorage.setItem(LS.sound, chkSound.checked ? '1' : '0');
 
 async function init() { await loadSheet(); initQR(); }
 window.addEventListener('DOMContentLoaded', init);
@@ -38,18 +54,32 @@ async function loadSheet() {
   });
 }
 
+function normSKU(s) { return (s ?? '').toString().trim().toUpperCase(); }
+
 function findRowBySKU(sku) {
-  if (!sku) return null;
-  const target = (sku + "").trim();
-  return SHEET_ROWS.find(r => ((r['SKU'] ?? '') + '').trim() === target) || null;
+  const target = normSKU(sku);
+  if (!target) return null;
+  return SHEET_ROWS.find(r => normSKU(r['SKU']) === target) || null;
+}
+
+function anyURL(row) {
+  for (const key of SHEET_HEADERS) {
+    if (key === 'SKU') continue;
+    const val = (row[key] || '').toString().trim();
+    if (/^https?:\/\//i.test(val)) return true;
+  }
+  return false;
 }
 
 function renderOpciones(sku, row) {
   resultado.innerHTML = '';
-  if (!row) { resultado.innerHTML = `<p>No se encontró el SKU <span class="sku">${sku}</span>.</p>`; return; }
+  const skuNorm = normSKU(sku);
+  if (!row) { resultado.innerHTML = `<p>No se encontró el SKU <span class="sku">${skuNorm}</span>.</p>`; return; }
+
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = `<p>SKU: <span class="sku">${sku}</span></p>`;
+  wrapper.innerHTML = `<p>SKU: <span class="sku">${skuNorm}</span></p>`;
   const grid = document.createElement('div'); grid.className = 'grid';
+
   for (const key of SHEET_HEADERS) {
     if (key === 'SKU') continue;
     const val = (row[key] || '').toString().trim();
@@ -61,16 +91,41 @@ function renderOpciones(sku, row) {
       grid.appendChild(btn);
     }
   }
-  if (!grid.childElementCount) { wrapper.appendChild(document.createTextNode("No hay URLs para este SKU.")); }
-  else { wrapper.appendChild(grid); }
+
+  if (!grid.childElementCount) {
+    const p = document.createElement('p');
+    p.textContent = "Este SKU existe, pero no tiene URLs configuradas.";
+    wrapper.appendChild(p);
+  } else {
+    wrapper.appendChild(grid);
+  }
   resultado.appendChild(wrapper);
+}
+
+function playBeep() {
+  if (!chkSound.checked) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(880, audioCtx.currentTime);
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.2, audioCtx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.12);
+    o.stop(audioCtx.currentTime + 0.14);
+  } catch (e) {}
+}
+
+function haptic() {
+  if (chkVibrate.checked && navigator.vibrate) navigator.vibrate(60);
 }
 
 function onScanSuccess(decodedText) {
   if (onScanSuccess._last === decodedText) return;
   onScanSuccess._last = decodedText;
-  navigator.vibrate && navigator.vibrate(60);
-  skuInput.value = decodedText;
+  haptic(); playBeep();
+  skuInput.value = normSKU(decodedText);
   const row = findRowBySKU(decodedText);
   renderOpciones(decodedText, row);
   setTimeout(() => onScanSuccess._last = null, 1500);
@@ -85,9 +140,10 @@ async function initQR() {
   html5QrCode = new Html5Qrcode('reader');
   btnStart.onclick = async () => {
     try {
+      const box = parseInt(selQrbox.value || '260', 10);
       await html5QrCode.start(
         currentCameraId ? { deviceId: { exact: currentCameraId } } : { facingMode: "environment" },
-        { fps:10, qrbox:260 },
+        { fps: 10, qrbox: box },
         onScanSuccess
       );
     } catch (e) { alert('No se pudo iniciar la cámara: ' + e); }

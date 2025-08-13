@@ -8,14 +8,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <style>
-    :root { --bg:#0f172a; --fg:#e2e8f0; --accent:#22d3ee; --muted:#475569; }
-    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; }
-    header { padding:14px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom: 1px solid #172036;}
+    :root { --bg:#0f172a; --fg:#e2e8f0; --accent:#22d3ee; --muted:#475569; --border:#172036; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu; }
+    header { padding:14px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom: 1px solid var(--border);}
     h1 { font-size: 18px; margin:0; }
-    main { padding:16px; max-width:900px; margin:0 auto; }
-    .card { background:#0b1220; border:1px solid #172036; border-radius:16px; padding:16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    main { padding:16px; max-width:980px; margin:0 auto; }
+    .card { background:#0b1220; border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
     .row { display:flex; gap:16px; flex-wrap:wrap; }
-    .col { flex:1 1 320px; min-width:260px; }
+    .col { flex:1 1 360px; min-width:300px; }
     #reader { width:100%; min-height: 280px; border-radius:12px; overflow:hidden; background:#020617; }
     button, .btn {
       appearance:none; border:1px solid #22314f; background:#0f172a; color:var(--fg); padding:10px 14px; border-radius:10px;
@@ -27,13 +27,26 @@
     input[type=text]{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #22314f; outline:none; background:#0f172a; color:var(--fg); }
     a { color: var(--accent); text-decoration: none; }
     footer { padding: 12px; text-align: center; color: #94a3b8; font-size: 12px;}
-    .badge { font-size: 12px; color:#94a3b8; background:#0b1220; padding:6px 8px; border-radius:8px; border:1px solid #172036;}
+    .badge { font-size: 12px; color:#94a3b8; background:#0b1220; padding:6px 8px; border-radius:8px; border:1px solid var(--border);}
     .sku { font-weight:600; color:#a5b4fc; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; }
+    .controls label { font-size: 13px; color:#cbd5e1; }
+    select { background:#0f172a; color:var(--fg); border:1px solid #22314f; border-radius:10px; padding:8px 10px; }
+    .switch { display:inline-flex; gap:6px; align-items:center; }
+    .toast { position: sticky; top:0; margin:0; padding:12px 16px; background:#0a1f36; border-bottom:1px solid #1f3b64; display:none; align-items:center; justify-content:space-between; gap:10px; }
+    .toast.show { display:flex; }
   </style>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
+  <div id="updateToast" class="toast">
+    <span>Hay una nueva versión disponible.</span>
+    <div style="display:flex; gap:8px;">
+      <button id="btnRefresh" class="btn">Actualizar</button>
+      <button id="btnDismiss" class="btn">Ignorar</button>
+    </div>
+  </div>
   <header>
     <h1>QR → URL de Tiendas</h1>
     <span class="badge">PWA</span>
@@ -43,6 +56,17 @@
       <div class="col card">
         <h2 style="margin-top:0">1) Escanear código QR</h2>
         <div id="reader"></div>
+        <div class="controls">
+          <label for="qrbox">Tamaño cuadro:</label>
+          <select id="qrbox">
+            <option value="220">Pequeño</option>
+            <option value="260" selected>Medio</option>
+            <option value="320">Grande</option>
+            <option value="380">Muy grande</option>
+          </select>
+          <span class="switch"><input type="checkbox" id="vibrate" checked> <label for="vibrate">Vibrar</label></span>
+          <span class="switch"><input type="checkbox" id="sound" checked> <label for="sound">Sonido</label></span>
+        </div>
         <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
           <button id="btnStart">Iniciar cámara</button>
           <button id="btnStop">Detener</button>
@@ -63,13 +87,24 @@
     </div>
   </main>
   <footer>
-    <span>Configura tu URL de CSV en <code>app.js</code> (const CSV_URL).</span>
+    <span>Datos: Google Sheets (CSV publicado). Cámara: html5-qrcode. ©</span>
   </footer>
   <script src="app.js" type="module"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      window.addEventListener('load', async () => {
+        const reg = await navigator.serviceWorker.register('./sw.js');
+        function showUpdate() { document.getElementById('updateToast').classList.add('show'); }
+        if (reg.waiting) showUpdate();
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker && newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) showUpdate();
+          });
+        });
+        document.getElementById('btnRefresh').onclick = () => { reg.waiting && reg.waiting.postMessage({ type: 'SKIP_WAITING' }); };
+        document.getElementById('btnDismiss').onclick = () => { document.getElementById('updateToast').classList.remove('show'); };
+        navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
       });
     }
   </script>

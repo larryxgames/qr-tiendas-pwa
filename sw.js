@@ -1,5 +1,5 @@
-// sw.js
-const CACHE = 'qr-pwa-v1';
+// sw.js (v2)
+const CACHE = 'qr-pwa-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const ASSETS = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
+  // No skipWaiting: el nuevo SW queda en "waiting" hasta que el usuario acepte
 });
 
 self.addEventListener('activate', (e) => {
@@ -21,6 +22,13 @@ self.addEventListener('activate', (e) => {
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     )
   );
+  return self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (e) => {
