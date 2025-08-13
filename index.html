@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>QR → Tiendas (PWA)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <style>
+    :root { --bg:#0f172a; --fg:#e2e8f0; --accent:#22d3ee; --muted:#475569; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; }
+    header { padding:14px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom: 1px solid #172036;}
+    h1 { font-size: 18px; margin:0; }
+    main { padding:16px; max-width:900px; margin:0 auto; }
+    .card { background:#0b1220; border:1px solid #172036; border-radius:16px; padding:16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .row { display:flex; gap:16px; flex-wrap:wrap; }
+    .col { flex:1 1 320px; min-width:260px; }
+    #reader { width:100%; min-height: 280px; border-radius:12px; overflow:hidden; background:#020617; }
+    button, .btn {
+      appearance:none; border:1px solid #22314f; background:#0f172a; color:var(--fg); padding:10px 14px; border-radius:10px;
+      cursor:pointer; font-size:14px;
+    }
+    button:hover { border-color:#2c4a7a; }
+    .grid { display:grid; gap:10px; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); margin-top:10px;}
+    .muted { color:#94a3b8; font-size: 13px; }
+    input[type=text]{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #22314f; outline:none; background:#0f172a; color:var(--fg); }
+    a { color: var(--accent); text-decoration: none; }
+    footer { padding: 12px; text-align: center; color: #94a3b8; font-size: 12px;}
+    .badge { font-size: 12px; color:#94a3b8; background:#0b1220; padding:6px 8px; border-radius:8px; border:1px solid #172036;}
+    .sku { font-weight:600; color:#a5b4fc; }
+  </style>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>QR → URL de Tiendas</h1>
+    <span class="badge">PWA</span>
+  </header>
+  <main>
+    <div class="row">
+      <div class="col card">
+        <h2 style="margin-top:0">1) Escanear código QR</h2>
+        <div id="reader"></div>
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+          <button id="btnStart">Iniciar cámara</button>
+          <button id="btnStop">Detener</button>
+          <button id="btnFlip">Cambiar cámara</button>
+        </div>
+        <p class="muted">Tip: El QR debe contener el <strong>SKU</strong> (texto). Requiere HTTPS para acceso a cámara.</p>
+      </div>
+      <div class="col card">
+        <h2 style="margin-top:0">2) Buscar SKU manualmente</h2>
+        <input id="skuInput" type="text" placeholder="Ingresa el SKU y presiona Enter">
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button id="btnBuscar">Buscar</button>
+          <button id="btnCargar">Recargar hoja</button>
+        </div>
+        <p id="sheetInfo" class="muted"></p>
+        <div id="resultado" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <span>Configura tu URL de CSV en <code>app.js</code> (const CSV_URL).</span>
+  </footer>
+  <script src="app.js" type="module"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      });
+    }
+  </script>
+</body>
+</html>
