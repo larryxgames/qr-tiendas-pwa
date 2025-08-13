@@ -1,5 +1,5 @@
 
-// app.js (LIVE v2)
+// app.js (LIVE v3)
 export const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS58VxZhfp2Z4pfQCG26_LaH9E765Ijf5t6Dz-50il_uwie1LtSt5E9OV_4uVoXQ7CoitaMcj1GniIi/pub?gid=0&single=true&output=csv";
 
 let SHEET_HEADERS = [];
@@ -10,6 +10,8 @@ const readerEl = document.getElementById('reader');
 const btnStart = document.getElementById('btnStart');
 const btnStop = document.getElementById('btnStop');
 const btnFlip = document.getElementById('btnFlip');
+const btnTorch = document.getElementById('btnTorch');
+const torchInfo = document.getElementById('torchInfo');
 const skuInput = document.getElementById('skuInput');
 const btnBuscar = document.getElementById('btnBuscar');
 const btnCargar = document.getElementById('btnCargar');
@@ -23,6 +25,7 @@ let html5QrCode = null;
 let currentCameraId = null;
 let cameras = [];
 let audioCtx = null;
+let torchEnabled = false;
 
 const LS = { qrbox: 'qr.qrbox', vibrate: 'qr.vibrate', sound: 'qr.sound' };
 
@@ -60,15 +63,6 @@ function findRowBySKU(sku) {
   const target = normSKU(sku);
   if (!target) return null;
   return SHEET_ROWS.find(r => normSKU(r['SKU']) === target) || null;
-}
-
-function anyURL(row) {
-  for (const key of SHEET_HEADERS) {
-    if (key === 'SKU') continue;
-    const val = (row[key] || '').toString().trim();
-    if (/^https?:\/\//i.test(val)) return true;
-  }
-  return false;
 }
 
 function renderOpciones(sku, row) {
@@ -117,9 +111,7 @@ function playBeep() {
   } catch (e) {}
 }
 
-function haptic() {
-  if (chkVibrate.checked && navigator.vibrate) navigator.vibrate(60);
-}
+function haptic() { if (chkVibrate.checked && navigator.vibrate) navigator.vibrate(60); }
 
 function onScanSuccess(decodedText) {
   if (onScanSuccess._last === decodedText) return;
@@ -129,6 +121,39 @@ function onScanSuccess(decodedText) {
   const row = findRowBySKU(decodedText);
   renderOpciones(decodedText, row);
   setTimeout(() => onScanSuccess._last = null, 1500);
+}
+
+function getTrackCapabilities() {
+  try {
+    if (html5QrCode && html5QrCode.getRunningTrackCapabilities) {
+      return html5QrCode.getRunningTrackCapabilities();
+    }
+    if (html5QrCode && html5QrCode._localMediaStream) {
+      const tracks = html5QrCode._localMediaStream.getVideoTracks();
+      if (tracks && tracks[0] && tracks[0].getCapabilities) return tracks[0].getCapabilities();
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function setTorch(on) {
+  torchEnabled = !!on;
+  try {
+    if (html5QrCode && html5QrCode.applyVideoConstraints) {
+      await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchEnabled }] });
+      btnTorch.textContent = torchEnabled ? "Linterna: ON" : "Linterna: OFF";
+      return;
+    }
+  } catch (e) {}
+  try {
+    const track = html5QrCode._localMediaStream?.getVideoTracks?.()[0];
+    if (track && track.applyConstraints) {
+      await track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
+      btnTorch.textContent = torchEnabled ? "Linterna: ON" : "Linterna: OFF";
+      return;
+    }
+  } catch (e) {}
+  torchInfo.textContent = "La linterna no es compatible con esta cámara/navegador.";
 }
 
 async function initQR() {
@@ -146,6 +171,15 @@ async function initQR() {
         { fps: 10, qrbox: box },
         onScanSuccess
       );
+      const caps = getTrackCapabilities();
+      if (caps && 'torch' in caps) {
+        btnTorch.disabled = false;
+        btnTorch.textContent = torchEnabled ? "Linterna: ON" : "Linterna: OFF";
+        torchInfo.textContent = "";
+      } else {
+        btnTorch.disabled = true;
+        torchInfo.textContent = "La linterna puede no estar disponible en este dispositivo/navegador.";
+      }
     } catch (e) { alert('No se pudo iniciar la cámara: ' + e); }
   };
   btnStop.onclick = async () => { try { await html5QrCode.stop(); } catch {} };
@@ -156,6 +190,8 @@ async function initQR() {
     currentCameraId = next.id;
     if (html5QrCode.isScanning) { await html5QrCode.stop(); await btnStart.onclick(); }
   };
+  btnTorch.onclick = async () => { await setTorch(!torchEnabled); };
+
   skuInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') btnBuscar.click(); });
   btnBuscar.onclick = () => { const sku = skuInput.value.trim(); const row = findRowBySKU(sku); renderOpciones(sku, row); };
   btnCargar.onclick = () => loadSheet();

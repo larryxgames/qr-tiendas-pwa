@@ -22,6 +22,7 @@
       cursor:pointer; font-size:14px;
     }
     button:hover { border-color:#2c4a7a; }
+    button[disabled] { opacity:.6; cursor:not-allowed; }
     .grid { display:grid; gap:10px; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); margin-top:10px;}
     .muted { color:#94a3b8; font-size: 13px; }
     input[type=text]{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #22314f; outline:none; background:#0f172a; color:var(--fg); }
@@ -71,8 +72,10 @@
           <button id="btnStart">Iniciar cámara</button>
           <button id="btnStop">Detener</button>
           <button id="btnFlip">Cambiar cámara</button>
+          <button id="btnTorch" disabled>Linterna</button>
         </div>
         <p class="muted">Tip: El QR debe contener el <strong>SKU</strong> (texto). Requiere HTTPS para acceso a cámara.</p>
+        <p class="muted" id="torchInfo"></p>
       </div>
       <div class="col card">
         <h2 style="margin-top:0">2) Buscar SKU manualmente</h2>
